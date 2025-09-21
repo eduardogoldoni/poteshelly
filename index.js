@@ -1,34 +1,30 @@
+// index.js
 const axios = require("axios");
 const admin = require("firebase-admin");
-const fs = require("fs");
 
-// 🔑 Carrega devices
-const devices = JSON.parse(fs.readFileSync("devices.json"));
+// 🔓 Ignorar certificados SSL não confiáveis (necessário para Shelly RPC)
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
-// 🔑 Variáveis de ambiente
-const SHELLY_RPC_URL = "https://shelly-206-eu.shelly.cloud:6022/jrpc"; // pode mudar conforme servidor
-const AUTH_KEY = process.env.AUTH_KEY;
-
-// 🔑 Firebase
-const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || "{}");
+// Carregar credenciais do Firebase a partir da variável de ambiente
+const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
   databaseURL: process.env.FIREBASE_URL
 });
+
 const db = admin.database();
 
-// Função para consultar status de um dispositivo
+// Configurações do Shelly
+const devices = require("./devices.json");
+const AUTH_KEY = process.env.AUTH_KEY;
+
+console.log("🚀 Ponte Shelly Cloud + Firebase iniciada");
+
 async function getShellyStatus(deviceId) {
   try {
-    const res = await axios.post(SHELLY_RPC_URL, {
-      id: 1,
-      method: "Shelly.GetStatus",
-      auth_key: AUTH_KEY
-    }, {
-      headers: { "Content-Type": "application/json" }
-    });
-
+    const url = `https://shelly-33-eu.shelly.cloud/device/status?id=${deviceId}&auth_key=${AUTH_KEY}`;
+    const res = await axios.get(url);
     return res.data;
   } catch (err) {
     console.error(`❌ Erro ao buscar ${deviceId}:`, err.message);
@@ -36,18 +32,19 @@ async function getShellyStatus(deviceId) {
   }
 }
 
-// Loop para atualizar Firebase
 async function updateFirebase() {
-  for (const dev of devices) {
-    const status = await getShellyStatus(dev.id);
-    if (status && status.result) {
-      const path = `telemetria/${dev.id}/last`;
-      await db.ref(path).set(status.result);
-      console.log(`✅ Atualizado ${dev.id} em ${path}`);
+  for (const d of devices) {
+    const data = await getShellyStatus(d.id);
+    if (data && data.data) {
+      await db.ref(`telemetria/${d.id}/last`).set({
+        ts: Date.now(),
+        status: data.data
+      });
+      console.log(`✅ Atualizado no Firebase: ${d.id}`);
     }
   }
 }
 
-// Intervalo de leitura
-setInterval(updateFirebase, 10000); // 10s
-console.log("🚀 Ponte Shelly Cloud → Firebase iniciada");
+// Atualiza a cada 30 segundos
+setInterval(updateFirebase, 30000);
+updateFirebase();
