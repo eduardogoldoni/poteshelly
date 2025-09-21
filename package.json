@@ -1,0 +1,13 @@
+{
+  "name": "ponteshelly",
+  "version": "1.0.0",
+  "description": "Ponte Shelly Cloud → Firebase",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.8",
+    "firebase-admin": "^12.1.0"
+  }
+}
