@@ -1,7 +1,9 @@
 const axios = require("axios");
 const https = require("https");
 
-// Criar agente HTTPS que ignora certificados inválidos
+// Ignorar SSL globalmente
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+
 const httpsAgent = new https.Agent({
   rejectUnauthorized: false,
 });
