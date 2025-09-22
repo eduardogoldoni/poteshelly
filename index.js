@@ -1,51 +1,62 @@
-const axios = require("axios");
-const admin = require("firebase-admin");
-const devices = require("./devices.json");
+const axios = require('axios');
+const admin = require('firebase-admin');
 
-const AUTH_KEY = process.env.AUTH_KEY;
-const FIREBASE_URL = process.env.FIREBASE_URL;
-const FIREBASE_SERVICE_ACCOUNT = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+// 🔑 Credenciais do Firebase
+const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 
-// Inicializa Firebase
 admin.initializeApp({
-  credential: admin.credential.cert(FIREBASE_SERVICE_ACCOUNT),
-  databaseURL: FIREBASE_URL,
+  credential: admin.credential.cert(serviceAccount),
+  databaseURL: process.env.FIREBASE_URL
 });
 
 const db = admin.database();
 
-async function fetchShellyData(device) {
+// 🔑 Configurações
+const AUTH_KEY = process.env.AUTH_KEY; 
+const devices = require('./devices.json');
+
+// Função para buscar dados no Shelly Cloud
+async function fetchShelly(deviceId) {
   try {
-    const url = `https://shelly-49-eu.shelly.cloud/device/status?id=${device.id}&auth_key=${AUTH_KEY}`;
-    const res = await axios.get(url);
+    const url = `https://shelly-206-eu.shelly.cloud/device/status`;
+    const response = await axios.post(url, {
+      id: deviceId,
+      auth_key: AUTH_KEY
+    });
 
-    if (!res.data || !res.data.data) {
-      console.log(`❌ Erro ao buscar ${device.id}`, res.data);
-      return;
+    if (response.data && response.data.data) {
+      console.log(`✅ Sucesso: ${deviceId}`);
+      return response.data.data;
+    } else {
+      console.log(`⚠️ Resposta inesperada do Shelly para ${deviceId}:`, response.data);
+      return null;
     }
-
-    const status = res.data.data.device_status;
-    let payload = { timestamp: Date.now() };
-
-    if (device.type === "ht") {
-      payload.temp = status.tmp?.tC || null;
-      payload.hum = status.hum?.rh || null;
-      payload.bat = status.bat?.value || null;
-    }
-
-    await db.ref(`telemetria/${device.id}/last`).set(payload);
-    console.log(`✅ Dados enviados: ${device.id}`, payload);
-
   } catch (err) {
-    console.error(`Erro no dispositivo ${device.id}:`, err.message);
+    console.error(`❌ Erro ao buscar ${deviceId}:`, err.message);
+    return null;
   }
 }
 
-async function loop() {
-  for (const dev of devices) {
-    await fetchShellyData(dev);
+// Função principal
+async function updateFirebase() {
+  for (const device of devices) {
+    const data = await fetchShelly(device.id);
+    if (data) {
+      await db.ref(`telemetria/${device.id}/last`).set({
+        timestamp: Date.now(),
+        data: data
+      });
+    }
   }
 }
 
-console.log("🌍 Ponte Shelly Cloud + Firebase iniciada");
-setInterval(loop, 60000); // roda a cada 60s
+// Loop de atualização
+setInterval(updateFirebase, 10000); // a cada 10s
+updateFirebase();
+
+// 🔥 Mantém servidor ativo no Render Free
+const express = require('express');
+const app = express();
+
+app.get('/', (req, res) => {
+  res.send('🚀 Ponte Shelly Cloud + Firebase rodan
