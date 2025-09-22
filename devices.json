@@ -1,6 +1,7 @@
 [
   {
-    "id": "shellyhtg3-e4b3233201e0", 
-    "type": "shellyht"
+    "id": "shellyhtg3-e4b3233201e0",
+    "type": "ht",
+    "name": "Sensor H&T Quarto"
   }
 ]
