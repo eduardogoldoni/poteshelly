@@ -2,7 +2,6 @@ const axios = require("axios");
 const admin = require("firebase-admin");
 const devices = require("./devices.json");
 
-// Pega configs do Render
 const AUTH_KEY = process.env.AUTH_KEY;
 const FIREBASE_URL = process.env.FIREBASE_URL;
 const FIREBASE_SERVICE_ACCOUNT = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
@@ -17,11 +16,11 @@ const db = admin.database();
 
 async function fetchShellyData(device) {
   try {
-    const url = `https://shelly-49-eu.shelly.cloud/device/status?auth_key=${AUTH_KEY}&id=${device.id}`;
+    const url = `https://shelly-49-eu.shelly.cloud/device/status?id=${device.id}&auth_key=${AUTH_KEY}`;
     const res = await axios.get(url);
 
     if (!res.data || !res.data.data) {
-      console.log(`❌ Erro ao buscar ${device.id}`);
+      console.log(`❌ Erro ao buscar ${device.id}`, res.data);
       return;
     }
 
