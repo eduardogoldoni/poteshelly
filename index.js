@@ -1,67 +1,80 @@
-const axios = require('axios');
-const admin = require('firebase-admin');
-const express = require('express');
+const express = require("express");
+const axios = require("axios");
+const admin = require("firebase-admin");
+
 const app = express();
+const PORT = process.env.PORT || 10000;
 
-// 🔑 Firebase
-const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+// =========================
+// 🔑 Variáveis de ambiente
+// =========================
+const AUTH_KEY = process.env.AUTH_KEY; // chave do Shelly
+const FIREBASE_URL = process.env.FIREBASE_URL; // URL RTDB
+const FIREBASE_SERVICE_ACCOUNT = process.env.FIREBASE_SERVICE_ACCOUNT
+  ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
+  : null;
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-  databaseURL: process.env.FIREBASE_URL
-});
-
+// =========================
+// 🔥 Firebase
+// =========================
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert(FIREBASE_SERVICE_ACCOUNT),
+    databaseURL: FIREBASE_URL,
+  });
+}
 const db = admin.database();
 
-// 🔑 Configurações
-const AUTH_KEY = process.env.AUTH_KEY;
-const devices = require('./devices.json');
+// =========================
+// 📡 Dispositivos
+// =========================
+const devices = require("./devices.json");
 
-// Função para buscar dados no Shelly Cloud
-async function fetchShelly(deviceId) {
+// =========================
+// 🔄 Função para buscar Shelly Cloud
+// =========================
+async function fetchShelly(device) {
   try {
-    const url = `https://shelly-206-eu.shelly.cloud/device/status`;
-    const response = await axios.post(url, {
-      id: deviceId,
-      auth_key: AUTH_KEY
-    });
+    const url = `https://shelly-33-eu.shelly.cloud/device/status?id=${device.id}&auth_key=${AUTH_KEY}`;
+    const response = await axios.get(url);
 
-    if (response.data && response.data.data) {
-      console.log(`✅ Sucesso: ${deviceId}`);
-      return response.data.data;
+    if (response.data && response.data.data && response.data.data.device_status) {
+      const status = response.data.data.device_status;
+
+      // salva no Firebase
+      await db.ref(`telemetria/${device.id}/last`).set({
+        temperature: status.tmp?.value || null,
+        humidity: status.hum?.value || null,
+        battery: status.bat?.value || null,
+        updatedAt: Date.now(),
+      });
+
+      console.log(`✅ Atualizado ${device.name}`);
     } else {
-      console.log(`⚠️ Resposta inesperada:`, response.data);
-      return null;
+      console.log(`⚠️ Resposta inesperada para ${device.name}`);
     }
   } catch (err) {
-    console.error(`❌ Erro ao buscar ${deviceId}:`, err.message);
-    return null;
+    console.error(`❌ Erro ao buscar ${device.name}:`, err.message);
   }
 }
 
-// Função principal
-async function updateFirebase() {
-  for (const device of devices) {
-    const data = await fetchShelly(device.id);
-    if (data) {
-      await db.ref(`telemetria/${device.id}/last`).set({
-        timestamp: Date.now(),
-        data: data
-      });
-    }
-  }
-}
+// =========================
+// 🔁 Loop de atualização
+// =========================
+setInterval(() => {
+  devices.forEach((d) => fetchShelly(d));
+}, 30000); // a cada 30s
 
-// Loop de atualização
-setInterval(updateFirebase, 10000);
-updateFirebase();
-
-// Servidor para Render Free
-app.get('/', (req, res) => {
-  res.send("Ponte Shelly Cloud + Firebase rodando!");
+// =========================
+// 🌐 Endpoint básico
+// =========================
+app.get("/", (req, res) => {
+  res.send("🚀 Ponte Shelly Cloud + Firebase rodando!");
 });
 
-const PORT = process.env.PORT || 10000;
+// =========================
+// ▶️ Inicia servidor
+// =========================
 app.listen(PORT, () => {
   console.log(`Servidor ativo na porta ${PORT}`);
 });
